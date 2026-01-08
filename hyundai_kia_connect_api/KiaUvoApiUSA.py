@@ -1277,9 +1277,14 @@ class KiaUvoApiUSA(ApiImpl):
     ) -> ORDER_STATUS:
         url = self.API_URL + "cmm/gts"
         body = {"xid": action_id}
-        response = self.post_request_with_logging_and_active_session(
-            token=token, url=url, json_body=body, vehicle=vehicle
-        )
+        try:
+            response = self.post_request_with_logging_and_active_session(
+                token=token, url=url, json_body=body, vehicle=vehicle
+            )
+        except Exception as e:
+            _LOGGER.warning(f"{DOMAIN} - check_action_status failed: {e}")
+            return 0  # Return pending/false to avoid crash
+
         response_json = response.json()
         last_action_completed = all(v == 0 for v in response_json["payload"].values())
         return last_action_completed
