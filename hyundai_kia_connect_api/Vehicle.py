@@ -1,5 +1,5 @@
 # pylint:disable=missing-class-docstring,missing-function-docstring,wildcard-import,unused-wildcard-import,invalid-name,logging-fstring-interpolation
-"""Vehicle class"""
+"""Vehicle class - Enhanced with additional Kia USA API fields"""
 
 import logging
 import datetime
@@ -80,6 +80,21 @@ class Vehicle:
     # Not part of the API, enabled in our library for scanning.
     enabled: bool = True
 
+    # =========================================================================
+    # NEW: Vehicle Details (from vehicleConfig.vehicleDetail)
+    # =========================================================================
+    trim_name: str = None
+    exterior_color: str = None
+    exterior_color_code: str = None
+    drive_type: str = None  # 2 = AWD, etc.
+    transmission_type: str = None
+    fuel_type: int = None  # 1 = gas, etc.
+    telematics_generation: str = None
+    sw_version: str = None
+    head_unit_type: str = None
+    head_unit_name: str = None
+    vehicle_image_url: str = None
+
     # Shared (EV/PHEV/HEV/IC)
     # General
     _total_driving_range: float = None
@@ -106,6 +121,17 @@ class Vehicle:
     washer_fluid_warning_is_on: bool = None
     brake_fluid_warning_is_on: bool = None
 
+    # =========================================================================
+    # NEW: Additional Status Fields
+    # =========================================================================
+    engine_oil_warning_is_on: bool = None
+    low_fuel_light_is_on: bool = None
+    
+    # Distance to empty (fuel range)
+    _distance_to_empty: float = None
+    _distance_to_empty_value: float = None
+    _distance_to_empty_unit: str = None
+
     # Climate
     _air_temperature: float = None
     _air_temperature_value: float = None
@@ -120,6 +146,19 @@ class Vehicle:
     front_right_seat_status: str = None
     rear_left_seat_status: str = None
     rear_right_seat_status: str = None
+
+    # =========================================================================
+    # NEW: Detailed Seat Heat/Vent Status
+    # =========================================================================
+    front_left_seat_heat_vent_type: int = None  # 0=off, 1=heat, 2=cool, 3=both
+    front_left_seat_heat_vent_level: int = None  # 1-4
+    front_right_seat_heat_vent_type: int = None
+    front_right_seat_heat_vent_level: int = None
+    rear_left_seat_heat_vent_type: int = None
+    rear_left_seat_heat_vent_level: int = None
+    rear_right_seat_heat_vent_type: int = None
+    rear_right_seat_heat_vent_level: int = None
+    steering_wheel_heater_step: int = None  # 0-2
 
     # Door Status
     is_locked: bool = None
@@ -161,6 +200,93 @@ class Vehicle:
     _location_longitude: float = None
     _location_last_set_time: datetime.datetime = None
 
+    # =========================================================================
+    # NEW: Extended Location Data
+    # =========================================================================
+    _location_altitude: float = None
+    _location_heading: int = None  # 0-360 degrees
+    _location_speed: float = None
+    _location_speed_unit: str = None
+
+    # =========================================================================
+    # NEW: Weather at Vehicle Location
+    # =========================================================================
+    weather_type: str = None  # "Clear", "Cloudy", "Rain", etc.
+    _weather_outside_temp: float = None
+    _weather_outside_temp_unit: str = None
+    weather_image_url: str = None
+
+    # =========================================================================
+    # NEW: Lamp/Light Status
+    # =========================================================================
+    headlamp_status: str = None
+    headlamp_left_low: bool = None
+    headlamp_right_low: bool = None
+    headlamp_left_high: bool = None
+    headlamp_right_high: bool = None
+    headlamp_left_beam: bool = None
+    headlamp_right_beam: bool = None
+    stop_lamp_left: bool = None
+    stop_lamp_right: bool = None
+    turn_signal_left_front: bool = None
+    turn_signal_right_front: bool = None
+    turn_signal_left_rear: bool = None
+    turn_signal_right_rear: bool = None
+    tail_lamp_status: int = None
+    hazard_status: int = None
+
+    # =========================================================================
+    # NEW: Security/Mode Status
+    # =========================================================================
+    valet_parking_mode: bool = None
+    remote_control_available: bool = None
+    system_cut_off_alert: bool = None
+
+    # =========================================================================
+    # NEW: Battery Details
+    # =========================================================================
+    car_battery_sensor_status: int = None
+    car_battery_warning: int = None
+    car_battery_power_auto_cut_mode: int = None
+    car_battery_delivery_mode: int = None
+
+    # =========================================================================
+    # NEW: Account/Enrollment Info
+    # =========================================================================
+    vehicle_nickname: str = None
+    preferred_dealer: str = None
+    primary_owner_id: str = None
+    secondary_driver_id: str = None
+    enrollment_status: str = None
+    enrollment_registration_date: str = None
+    enrollment_expiration_mileage: str = None
+    is_financed: bool = None
+
+    # =========================================================================
+    # NEW: Supported Features (from vehicleFeature)
+    # =========================================================================
+    feature_remote_lock: bool = None
+    feature_remote_start: bool = None
+    feature_heated_steering_wheel: bool = None
+    feature_heated_seats: bool = None
+    feature_ventilated_seats: bool = None
+    feature_heated_side_mirrors: bool = None
+    feature_heated_rear_window: bool = None
+    feature_horn_lights: bool = None
+    feature_valet_mode: bool = None
+    feature_geofence: bool = None
+    feature_curfew: bool = None
+    feature_speed_alert: bool = None
+    feature_driving_score: bool = None
+    feature_trip_info: bool = None
+    feature_poi: bool = None
+    feature_last_mile: bool = None
+    feature_wifi_hotspot: bool = None
+    feature_digital_key: bool = None
+    feature_ota_update: bool = None
+    feature_window_safety: bool = None
+    feature_rear_occupancy_alert: bool = None
+
     # EV fields (EV/PHEV)
 
     ev_charge_port_door_is_open: typing.Union[bool, None] = None
@@ -191,17 +317,6 @@ class Vehicle:
     remote_ignition: bool = None
     transmission_condition: str = None
     sleep_mode_check: bool = None
-
-    # Lamp status fields (KiaUvoApiEU and CA)
-    headlamp_status: str = None
-    headlamp_left_low: bool = None
-    headlamp_right_low: bool = None
-    stop_lamp_left: bool = None
-    stop_lamp_right: bool = None
-    turn_signal_left_front: bool = None
-    turn_signal_right_front: bool = None
-    turn_signal_left_rear: bool = None
-    turn_signal_right_rear: bool = None
 
     @property
     def daily_stats(self):
@@ -363,6 +478,23 @@ class Vehicle:
         self._total_driving_range_unit = value[1]
         self._total_driving_range = value[0]
 
+    # =========================================================================
+    # NEW: Distance to Empty property
+    # =========================================================================
+    @property
+    def distance_to_empty(self):
+        return self._distance_to_empty
+
+    @property
+    def distance_to_empty_unit(self):
+        return self._distance_to_empty_unit
+
+    @distance_to_empty.setter
+    def distance_to_empty(self, value):
+        self._distance_to_empty_value = value[0]
+        self._distance_to_empty_unit = value[1]
+        self._distance_to_empty = value[0]
+
     @property
     def next_service_distance(self):
         return self._next_service_distance
@@ -429,6 +561,52 @@ class Vehicle:
         self._location_latitude = value[0]
         self._location_longitude = value[1]
         self._location_last_set_time = get_safe_local_datetime(value[2])
+
+    # =========================================================================
+    # NEW: Extended location properties
+    # =========================================================================
+    @property
+    def location_altitude(self):
+        return self._location_altitude
+
+    @location_altitude.setter
+    def location_altitude(self, value):
+        self._location_altitude = value
+
+    @property
+    def location_heading(self):
+        return self._location_heading
+
+    @location_heading.setter
+    def location_heading(self, value):
+        self._location_heading = value
+
+    @property
+    def location_speed(self):
+        return self._location_speed
+
+    @location_speed.setter
+    def location_speed(self, value):
+        if isinstance(value, tuple):
+            self._location_speed = value[0]
+            self._location_speed_unit = value[1]
+        else:
+            self._location_speed = value
+
+    # =========================================================================
+    # NEW: Weather properties
+    # =========================================================================
+    @property
+    def weather_outside_temp(self):
+        return self._weather_outside_temp
+
+    @weather_outside_temp.setter
+    def weather_outside_temp(self, value):
+        if isinstance(value, tuple):
+            self._weather_outside_temp = value[0]
+            self._weather_outside_temp_unit = value[1]
+        else:
+            self._weather_outside_temp = value
 
     @property
     def odometer(self):

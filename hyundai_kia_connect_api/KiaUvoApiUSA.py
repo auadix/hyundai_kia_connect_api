@@ -1,15 +1,18 @@
-"""KiaUvoAPIUSA.py"""
+"""KiaUvoAPIUSA.py - Enhanced Version with Full API Data Extraction"""
 
-# pylint:disable=logging-fstring-interpolation,unused-argument,missing-timeout,bare-except,missing-function-docstring,invalid-name,unnecessary-pass,broad-exception-raised
+# pylint:disable=logging-fstring-interpolation,unused-argument,missing-timeout,bare-except,missing-function-docstring,invalid-name,unnecessary-pass,broad-exception-raised,line-too-long
 import datetime as dt
 import logging
+import random
+import secrets
 import ssl
+import string
 import time
+import uuid
 import typing as ty
 from datetime import datetime
 
 import certifi
-import uuid
 import requests
 from requests import RequestException, Response
 from requests.adapters import HTTPAdapter
@@ -109,7 +112,7 @@ def request_with_logging(func):
 
 
 class KiaUvoApiUSA(ApiImpl):
-    """KiaUvoApiUSA"""
+    """KiaUvoApiUSA - Enhanced with full API data extraction"""
 
     def __init__(self, region: int, brand: int, language) -> None:
         self.LANGUAGE: str = language
@@ -117,7 +120,6 @@ class KiaUvoApiUSA(ApiImpl):
 
         # Randomly generate a plausible device id on startup
         self.device_id = str(uuid.uuid4()).upper()
-
         self.BASE_URL: str = "api.owners.kia.com"
         self.API_URL: str = "https://" + self.BASE_URL + "/apigw/v1/"
         self._session = None
@@ -134,31 +136,30 @@ class KiaUvoApiUSA(ApiImpl):
 
     def api_headers(self) -> dict:
         offset = time.localtime().tm_gmtoff / 60 / 60
-        # Generate clientuuid as hash of device_id (similar to iOS app)
-        client_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, self.device_id)
-
         headers = {
-            "content-type": "application/json;charset=utf-8",
-            "accept": "application/json",
+            "content-type": "application/json;charset=UTF-8",
+            "accept": "application/json, text/plain, */*",
             "accept-encoding": "gzip, deflate, br",
             "accept-language": "en-US,en;q=0.9",
             "accept-charset": "utf-8",
+            "phonebrand": "iPhone",
             "apptype": "L",
             "appversion": "7.22.0",
             "clientid": "SPACL716-APL",
-            "clientuuid": client_uuid,
+            "clientuuid": str(uuid.uuid5(uuid.NAMESPACE_DNS, self.device_id)),
             "from": "SPA",
             "host": self.BASE_URL,
             "language": "0",
             "offset": str(int(offset)),
             "ostype": "iOS",
             "osversion": "15.8.5",
-            "phonebrand": "iPhone",
             "secretkey": "sydnat-9kykci-Kuhtep-h5nK",
             "to": "APIGW",
             "tokentype": "A",
             "user-agent": "KIAPrimo_iOS/37 CFNetwork/1335.0.3.4 Darwin/21.6.0",
         }
+        # Should produce something like "Mon, 18 Oct 2021 07:06:26 GMT".
+        # May require adjusting locale to en_US
         date = datetime.now(tz=dt.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
         headers["date"] = date
         headers["deviceid"] = self.device_id
@@ -225,7 +226,7 @@ class KiaUvoApiUSA(ApiImpl):
         """Complete login with sid and rmtoken to get final session id"""
         url = self.API_URL + "prof/authUser"
         data = {
-            "deviceKey": self.device_id,
+            "deviceKey": "",
             "deviceType": 2,
             "userCredential": {"userId": username, "password": password},
         }
@@ -266,7 +267,7 @@ class KiaUvoApiUSA(ApiImpl):
         """
         url = self.API_URL + "prof/authUser"
         data = {
-            "deviceKey": self.device_id,
+            "deviceKey": "",
             "deviceType": 2,
             "userCredential": {"userId": username, "password": password},
         }
@@ -371,10 +372,9 @@ class KiaUvoApiUSA(ApiImpl):
         """
         url = self.API_URL + "prof/authUser"
         data = {
-            "deviceKey": self.device_id,
+            "deviceKey": "",
             "deviceType": 2,
             "userCredential": {"userId": username, "password": password},
-            "tncFlag": 1,
         }
         if token and getattr(token, "device_id", None):
             self.device_id = token.device_id
@@ -382,7 +382,6 @@ class KiaUvoApiUSA(ApiImpl):
             self._otp_handler = otp_handler
         headers = self.api_headers()
         if token and token.refresh_token:
-            data["deviceKey"] = self.device_id
             _LOGGER.debug(f"{DOMAIN} - Attempting login with stored rmtoken")
             headers["rmtoken"] = token.refresh_token
         response = self.session.post(url, json=data, headers=headers)
@@ -431,14 +430,10 @@ class KiaUvoApiUSA(ApiImpl):
                     )
             else:
                 if payload.get("hasEmail") and payload.get("hasPhone"):
-                    print("\nOTP Authentication Required")
-                    print(f"Email: {payload.get('email', 'N/A')}")
-                    print(f"Phone: {payload.get('phone', 'N/A')}")
-                    choice = (
-                        input("Send OTP to (E)mail or (P)hone? [E/P]: ").strip().upper()
+                    _LOGGER.warning(
+                        f"{DOMAIN} - OTP Authentication Required. Multiple methods available. Defaulting to EMAIL."
                     )
-                    if choice == "P":
-                        notify_type = "PHONE"
+                    notify_type = "EMAIL"
                 elif payload.get("hasPhone"):
                     notify_type = "PHONE"
             self._send_otp(otp_key, notify_type, xid)
@@ -459,7 +454,7 @@ class KiaUvoApiUSA(ApiImpl):
                     _LOGGER.debug(f"{DOMAIN} - otp_handler input_code failed")
             if not otp_code:
                 if handler is None:
-                    otp_code = input("Enter OTP code: ").strip()
+                    raise AuthenticationError(f"{DOMAIN} - OTP code required")
                 else:
                     raise AuthenticationError(f"{DOMAIN} - OTP code required")
             sid, rmtoken = self._verify_otp(otp_key, otp_code, xid)
@@ -559,7 +554,23 @@ class KiaUvoApiUSA(ApiImpl):
         self.update_vehicle_with_cached_state(token, vehicle)
 
     def _update_vehicle_properties(self, vehicle: Vehicle, state: dict) -> None:
-        """Get cached vehicle data and update Vehicle instance with it"""
+        """Get cached vehicle data and update Vehicle instance with it.
+        
+        ENHANCED: Now extracts ALL available data from the Kia USA API including:
+        - Vehicle details (trim, color, SW version)
+        - Extended location (heading, altitude, speed)
+        - Weather at vehicle location
+        - Lamp/light status
+        - Security status (valet mode, remote control available)
+        - Detailed seat heat/vent status
+        - Supported features
+        - Account/enrollment info
+        """
+        
+        # =====================================================================
+        # BASIC VEHICLE STATUS (Original fields)
+        # =====================================================================
+        
         vehicle.last_updated_at = parse_datetime(
             get_child_value(
                 state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.syncDate.utc"
@@ -580,7 +591,7 @@ class KiaUvoApiUSA(ApiImpl):
         )
         vehicle.car_battery_percentage = get_child_value(
             state,
-            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.stateOfCharge",  # noqa
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.stateOfCharge",
         )
         vehicle.engine_is_running = get_child_value(
             state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.engine"
@@ -604,7 +615,7 @@ class KiaUvoApiUSA(ApiImpl):
             state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.washerFluidStatus"
         )
         vehicle.brake_fluid_warning_is_on = get_child_value(
-            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.breakOilStatus"
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.brakeOilStatus"
         )
         vehicle.smart_key_battery_warning_is_on = get_child_value(
             state,
@@ -616,31 +627,31 @@ class KiaUvoApiUSA(ApiImpl):
 
         vehicle.steering_wheel_heater_is_on = get_child_value(
             state,
-            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatingAccessory.steeringWheel",  # noqa
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatingAccessory.steeringWheel",
         )
         vehicle.back_window_heater_is_on = get_child_value(
             state,
-            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatingAccessory.rearWindow",  # noqa
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatingAccessory.rearWindow",
         )
         vehicle.side_mirror_heater_is_on = get_child_value(
             state,
-            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatingAccessory.sideMirror",  # noqa
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatingAccessory.sideMirror",
         )
-        vehicle.front_left_seat_heater_is_on = get_child_value(
+        vehicle.front_left_seat_status = get_child_value(
             state,
-            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.seatHeaterVentState.flSeatHeatState",  # noqa
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.seatHeaterVentState.flSeatHeatState",
         )
-        vehicle.front_right_seat_heater_is_on = get_child_value(
+        vehicle.front_right_seat_status = get_child_value(
             state,
-            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.seatHeaterVentState.frSeatHeatState",  # noqa
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.seatHeaterVentState.frSeatHeatState",
         )
-        vehicle.rear_left_seat_heater_is_on = get_child_value(
+        vehicle.rear_left_seat_status = get_child_value(
             state,
-            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.seatHeaterVentState.rlSeatHeatState",  # noqa
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.seatHeaterVentState.rlSeatHeatState",
         )
-        vehicle.rear_right_seat_heater_is_on = get_child_value(
+        vehicle.rear_right_seat_status = get_child_value(
             state,
-            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.seatHeaterVentState.rrSeatHeatState",  # noqa
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.seatHeaterVentState.rrSeatHeatState",
         )
         vehicle.is_locked = get_child_value(
             state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.doorLock"
@@ -701,6 +712,8 @@ class KiaUvoApiUSA(ApiImpl):
                 state,
                 "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.windowStatus.windowRR",
             )
+        
+        # EV Status
         vehicle.ev_battery_percentage = get_child_value(
             state,
             "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.batteryStatus",
@@ -733,84 +746,92 @@ class KiaUvoApiUSA(ApiImpl):
         vehicle.ev_driving_range = (
             get_child_value(
                 state,
-                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.evModeRange.value",  # noqa
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.evModeRange.value",
             ),
             DISTANCE_UNITS[
                 get_child_value(
                     state,
-                    "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.evModeRange.unit",  # noqa
+                    "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.evModeRange.unit",
                 )
-            ],
+            ] if get_child_value(
+                state,
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.evModeRange.unit",
+            ) is not None else DISTANCE_UNITS[3],
         )
         vehicle.ev_estimated_current_charge_duration = (
             get_child_value(
                 state,
-                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.remainChargeTime.0.timeInterval.value",  # noqa
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.remainChargeTime.0.timeInterval.value",
             ),
             "m",
         )
         vehicle.ev_estimated_fast_charge_duration = (
             get_child_value(
                 state,
-                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.remainChargeTime.0.etc1.value",  # noqa
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.remainChargeTime.0.etc1.value",
             ),
             "m",
         )
         vehicle.ev_estimated_portable_charge_duration = (
             get_child_value(
                 state,
-                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.remainChargeTime.0.etc2.value",  # noqa
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.remainChargeTime.0.etc2.value",
             ),
             "m",
         )
         vehicle.ev_estimated_station_charge_duration = (
             get_child_value(
                 state,
-                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.remainChargeTime.0.etc3.value",  # noqa
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.remainChargeTime.0.etc3.value",
             ),
             "m",
         )
-        vehicle.total_driving_range = (
-            get_child_value(
-                state,
-                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.totalAvailableRange.value",  # noqa
-            ),
-            DISTANCE_UNITS[
-                get_child_value(
-                    state,
-                    "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.totalAvailableRange.unit",  # noqa
-                )
-            ],
-        )
-        if get_child_value(
+        
+        # Total driving range (for EVs/PHEVs)
+        total_range_value = get_child_value(
             state,
-            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.gasModeRange.value",  # noqa
-        ):
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.totalAvailableRange.value",
+        )
+        total_range_unit = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.totalAvailableRange.unit",
+        )
+        if total_range_value is not None:
+            vehicle.total_driving_range = (
+                total_range_value,
+                DISTANCE_UNITS[total_range_unit] if total_range_unit is not None else DISTANCE_UNITS[3],
+            )
+        
+        # Fuel driving range
+        gas_range = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.gasModeRange.value",
+        )
+        if gas_range:
+            gas_unit = get_child_value(
+                state,
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.gasModeRange.unit",
+            )
             vehicle.fuel_driving_range = (
-                get_child_value(
-                    state,
-                    "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.gasModeRange.value",  # noqa
-                ),
-                DISTANCE_UNITS[
-                    get_child_value(
-                        state,
-                        "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.drvDistance.0.rangeByFuel.gasModeRange.unit",  # noqa
-                    )
-                ],
+                gas_range,
+                DISTANCE_UNITS[gas_unit] if gas_unit is not None else DISTANCE_UNITS[3],
             )
         else:
-            vehicle.fuel_driving_range = (
-                get_child_value(
-                    state,
-                    "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.distanceToEmpty.value",  # noqa
-                ),
-                DISTANCE_UNITS[
-                    get_child_value(
-                        state,
-                        "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.distanceToEmpty.unit",  # noqa
-                    )
-                ],
+            # For non-EV vehicles, use distanceToEmpty
+            dte_value = get_child_value(
+                state,
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.distanceToEmpty.value",
             )
+            dte_unit = get_child_value(
+                state,
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.distanceToEmpty.unit",
+            )
+            if dte_value is not None:
+                vehicle.fuel_driving_range = (
+                    dte_value,
+                    DISTANCE_UNITS[dte_unit] if dte_unit is not None else DISTANCE_UNITS[3],
+                )
+        
         vehicle.fuel_level_is_low = get_child_value(
             state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lowFuelLight"
         )
@@ -821,6 +842,7 @@ class KiaUvoApiUSA(ApiImpl):
             state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.airCtrl"
         )
 
+        # Location
         if get_child_value(state, "lastVehicleInfo.location.coord.lat"):
             vehicle.location = (
                 get_child_value(state, "lastVehicleInfo.location.coord.lat"),
@@ -843,27 +865,383 @@ class KiaUvoApiUSA(ApiImpl):
             state, "lastVehicleInfo.activeDTC.dtcCategory"
         )
 
+        # =====================================================================
+        # NEW: VEHICLE DETAILS (from vehicleConfig.vehicleDetail)
+        # =====================================================================
+        
+        vehicle.trim_name = get_child_value(
+            state, "vehicleConfig.vehicleDetail.vehicle.trim.trimName"
+        )
+        vehicle.exterior_color = get_child_value(
+            state, "vehicleConfig.vehicleDetail.vehicle.exteriorColor"
+        )
+        vehicle.exterior_color_code = get_child_value(
+            state, "vehicleConfig.vehicleDetail.vehicle.exteriorColorCode"
+        )
+        vehicle.drive_type = get_child_value(
+            state, "vehicleConfig.vehicleDetail.vehicle.trim.driveType"
+        )
+        vehicle.transmission_type = get_child_value(
+            state, "vehicleConfig.vehicleDetail.vehicle.trim.transmissionType"
+        )
+        vehicle.fuel_type = get_child_value(
+            state, "vehicleConfig.vehicleDetail.vehicle.fuelType"
+        )
+        vehicle.telematics_generation = get_child_value(
+            state, "vehicleConfig.vehicleDetail.device.telematics.generation"
+        )
+        vehicle.sw_version = get_child_value(
+            state, "vehicleConfig.vehicleDetail.device.swVersion"
+        )
+        vehicle.head_unit_type = get_child_value(
+            state, "vehicleConfig.vehicleDetail.vehicle.headUnitType"
+        )
+        vehicle.head_unit_name = get_child_value(
+            state, "vehicleConfig.vehicleDetail.vehicle.headUnitName"
+        )
+        
+        # Vehicle image URL
+        image_path = get_child_value(state, "vehicleConfig.vehicleDetail.images.0.imagePath")
+        image_name = get_child_value(state, "vehicleConfig.vehicleDetail.images.0.imageName")
+        if image_path and image_name:
+            vehicle.vehicle_image_url = f"https://www.kia.com{image_path}{image_name}"
+
+        # =====================================================================
+        # NEW: DISTANCE TO EMPTY (for gas vehicles)
+        # =====================================================================
+        
+        dte_value = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.distanceToEmpty.value"
+        )
+        dte_unit = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.distanceToEmpty.unit"
+        )
+        if dte_value is not None:
+            unit_str = DISTANCE_UNITS.get(dte_unit, DISTANCE_UNITS[3])
+            vehicle.distance_to_empty = (dte_value, unit_str)
+
+        # =====================================================================
+        # NEW: ADDITIONAL STATUS FIELDS
+        # =====================================================================
+        
+        vehicle.engine_oil_warning_is_on = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.engineOilStatus"
+        )
+        vehicle.low_fuel_light_is_on = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lowFuelLight"
+        )
+        vehicle.ign3 = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.ign3"
+        )
+        vehicle.transmission_condition = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.transCond"
+        )
+        
+        # Individual tire pressure warnings
+        vehicle.tire_pressure_front_left_warning_is_on = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.tirePressure.frontLeft"
+        )
+        vehicle.tire_pressure_front_right_warning_is_on = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.tirePressure.frontRight"
+        )
+        vehicle.tire_pressure_rear_left_warning_is_on = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.tirePressure.rearLeft"
+        )
+        vehicle.tire_pressure_rear_right_warning_is_on = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.tirePressure.rearRight"
+        )
+
+        # =====================================================================
+        # NEW: DETAILED SEAT HEAT/VENT STATUS
+        # =====================================================================
+        
+        vehicle.front_left_seat_heat_vent_type = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatVentSeat.driverSeat.heatVentType",
+        )
+        vehicle.front_left_seat_heat_vent_level = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatVentSeat.driverSeat.heatVentLevel",
+        )
+        vehicle.front_right_seat_heat_vent_type = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatVentSeat.passengerSeat.heatVentType",
+        )
+        vehicle.front_right_seat_heat_vent_level = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatVentSeat.passengerSeat.heatVentLevel",
+        )
+        vehicle.rear_left_seat_heat_vent_type = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatVentSeat.rearLeftSeat.heatVentType",
+        )
+        vehicle.rear_left_seat_heat_vent_level = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatVentSeat.rearLeftSeat.heatVentLevel",
+        )
+        vehicle.rear_right_seat_heat_vent_type = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatVentSeat.rearRightSeat.heatVentType",
+        )
+        vehicle.rear_right_seat_heat_vent_level = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatVentSeat.rearRightSeat.heatVentLevel",
+        )
+        vehicle.steering_wheel_heater_step = get_child_value(
+            state,
+            "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.climate.heatingAccessory.steeringWheelStep",
+        )
+
+        # =====================================================================
+        # NEW: EXTENDED LOCATION DATA
+        # =====================================================================
+        
+        vehicle.location_altitude = get_child_value(
+            state, "lastVehicleInfo.location.coord.alt"
+        )
+        vehicle.location_heading = get_child_value(
+            state, "lastVehicleInfo.location.head"
+        )
+        loc_speed = get_child_value(state, "lastVehicleInfo.location.speed.value")
+        loc_speed_unit = get_child_value(state, "lastVehicleInfo.location.speed.unit")
+        if loc_speed is not None:
+            vehicle._location_speed = loc_speed
+            vehicle._location_speed_unit = loc_speed_unit
+
+        # =====================================================================
+        # NEW: WEATHER AT VEHICLE LOCATION
+        # =====================================================================
+        
+        vehicle.weather_type = get_child_value(
+            state, "lastVehicleInfo.weather.weatherType"
+        )
+        
+        # Try Fahrenheit first (index 1), then Celsius (index 0)
+        outside_temp_f = get_child_value(state, "lastVehicleInfo.weather.outsideTemp.1.value")
+        outside_temp_c = get_child_value(state, "lastVehicleInfo.weather.outsideTemp.0.value")
+        if outside_temp_f and outside_temp_f != "--":
+            vehicle._weather_outside_temp = outside_temp_f
+            vehicle._weather_outside_temp_unit = "F"
+        elif outside_temp_c and outside_temp_c != "--":
+            vehicle._weather_outside_temp = outside_temp_c
+            vehicle._weather_outside_temp_unit = "C"
+        
+        weather_img_path = get_child_value(state, "lastVehicleInfo.weather.weatherImage.imagePath")
+        weather_img_name = get_child_value(state, "lastVehicleInfo.weather.weatherImage.imageName")
+        if weather_img_path and weather_img_name:
+            vehicle.weather_image_url = f"https://www.kia.com{weather_img_path}{weather_img_name}"
+
+        # =====================================================================
+        # NEW: LAMP/LIGHT STATUS
+        # =====================================================================
+        
+        vehicle.headlamp_status = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.headLamp.headLampStatus"
+        )
+        vehicle.headlamp_left_low = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.headLamp.lampLL"
+        )
+        vehicle.headlamp_right_low = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.headLamp.lampRL"
+        )
+        vehicle.headlamp_left_high = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.headLamp.lampLH"
+        )
+        vehicle.headlamp_right_high = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.headLamp.lampRH"
+        )
+        vehicle.headlamp_left_beam = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.headLamp.lampLB"
+        )
+        vehicle.headlamp_right_beam = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.headLamp.lampRB"
+        )
+        vehicle.stop_lamp_left = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.stopLamp.leftLamp"
+        )
+        vehicle.stop_lamp_right = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.stopLamp.rightLamp"
+        )
+        vehicle.turn_signal_left_front = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.turnSignalLamp.lampLF"
+        )
+        vehicle.turn_signal_right_front = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.turnSignalLamp.lampRF"
+        )
+        vehicle.turn_signal_left_rear = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.turnSignalLamp.lampLR"
+        )
+        vehicle.turn_signal_right_rear = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.turnSignalLamp.lampRR"
+        )
+        vehicle.tail_lamp_status = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lightStatus.tailLampStatus"
+        )
+        vehicle.hazard_status = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lightStatus.hazardStatus"
+        )
+
+        # =====================================================================
+        # NEW: SECURITY/MODE STATUS
+        # =====================================================================
+        
+        valet_mode = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.valetParkingMode"
+        )
+        vehicle.valet_parking_mode = valet_mode == 1 if valet_mode is not None else None
+        
+        remote_avail = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.remoteControlAvailable"
+        )
+        vehicle.remote_control_available = remote_avail == 1 if remote_avail is not None else None
+        
+        sys_cutoff = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.systemCutOffAlert"
+        )
+        vehicle.system_cut_off_alert = sys_cutoff == 1 if sys_cutoff is not None else None
+
+        # =====================================================================
+        # NEW: BATTERY DETAILS
+        # =====================================================================
+        
+        vehicle.car_battery_sensor_status = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.sensorStatus"
+        )
+        vehicle.car_battery_warning = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.warning"
+        )
+        vehicle.car_battery_power_auto_cut_mode = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.powerAutoCutMode"
+        )
+        vehicle.car_battery_delivery_mode = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.batteryStatus.deliveryMode"
+        )
+
+        # =====================================================================
+        # NEW: ACCOUNT/ENROLLMENT INFO
+        # =====================================================================
+        
+        vehicle.vehicle_nickname = get_child_value(
+            state, "lastVehicleInfo.vehicleNickName"
+        )
+        vehicle.preferred_dealer = get_child_value(
+            state, "lastVehicleInfo.preferredDealer"
+        )
+        vehicle.primary_owner_id = get_child_value(
+            state, "lastVehicleInfo.primaryOwnerID"
+        )
+        vehicle.secondary_driver_id = get_child_value(
+            state, "lastVehicleInfo.secondaryDriverID"
+        )
+        vehicle.enrollment_status = get_child_value(
+            state, "lastVehicleInfo.enrollment.enrollmentStatus"
+        )
+        vehicle.enrollment_registration_date = get_child_value(
+            state, "lastVehicleInfo.enrollment.registrationDate"
+        )
+        vehicle.enrollment_expiration_mileage = get_child_value(
+            state, "lastVehicleInfo.enrollment.expirationMileage"
+        )
+        vehicle.is_financed = get_child_value(
+            state, "lastVehicleInfo.financed"
+        )
+
+        # =====================================================================
+        # NEW: SUPPORTED FEATURES (from vehicleFeature)
+        # =====================================================================
+        
+        vehicle.feature_remote_lock = get_child_value(
+            state, "vehicleConfig.vehicleFeature.remoteFeature.lock"
+        ) == "1"
+        vehicle.feature_remote_start = get_child_value(
+            state, "vehicleConfig.vehicleFeature.remoteFeature.start"
+        ) in ["1", "2", "3"]
+        vehicle.feature_heated_steering_wheel = get_child_value(
+            state, "vehicleConfig.vehicleFeature.remoteFeature.heatedSteeringWheel"
+        ) in ["1", "2"]
+        vehicle.feature_heated_seats = get_child_value(
+            state, "vehicleConfig.vehicleFeature.remoteFeature.heatedSeat"
+        ) == "1"
+        vehicle.feature_ventilated_seats = get_child_value(
+            state, "vehicleConfig.vehicleFeature.remoteFeature.ventSeat"
+        ) == "1"
+        vehicle.feature_heated_side_mirrors = get_child_value(
+            state, "vehicleConfig.vehicleFeature.remoteFeature.heatedSideMirror"
+        ) == "1"
+        vehicle.feature_heated_rear_window = get_child_value(
+            state, "vehicleConfig.vehicleFeature.remoteFeature.heatedRearWindow"
+        ) == "1"
+        vehicle.feature_horn_lights = get_child_value(
+            state, "vehicleConfig.vehicleFeature.remoteFeature.hornlight"
+        ) == "1"
+        vehicle.feature_valet_mode = get_child_value(
+            state, "vehicleConfig.vehicleFeature.alertFeature.valetType.valet"
+        ) == "1"
+        vehicle.feature_geofence = get_child_value(
+            state, "vehicleConfig.vehicleFeature.alertFeature.geofenceType.geofence"
+        ) == "1"
+        vehicle.feature_curfew = get_child_value(
+            state, "vehicleConfig.vehicleFeature.alertFeature.curfewType.curfew"
+        ) == "1"
+        vehicle.feature_speed_alert = get_child_value(
+            state, "vehicleConfig.vehicleFeature.alertFeature.speedType.speed"
+        ) == "1"
+        vehicle.feature_driving_score = get_child_value(
+            state, "vehicleConfig.vehicleFeature.vrmFeature.drivingScore"
+        ) == "1"
+        vehicle.feature_trip_info = get_child_value(
+            state, "vehicleConfig.vehicleFeature.vrmFeature.trip"
+        ) == "1"
+        vehicle.feature_poi = get_child_value(
+            state, "vehicleConfig.vehicleFeature.locationFeature.poi"
+        ) == "1"
+        vehicle.feature_last_mile = get_child_value(
+            state, "vehicleConfig.vehicleFeature.locationFeature.lastMile"
+        ) == "1"
+        vehicle.feature_wifi_hotspot = get_child_value(
+            state, "vehicleConfig.vehicleFeature.userSettingFeature.wifiHotSpot"
+        ) == "1"
+        vehicle.feature_digital_key = get_child_value(
+            state, "vehicleConfig.vehicleFeature.userSettingFeature.digitalKeyOption"
+        ) in ["1", "2", "3"]
+        vehicle.feature_ota_update = get_child_value(
+            state, "vehicleConfig.vehicleFeature.userSettingFeature.otaSupport"
+        ) == "1"
+        vehicle.feature_window_safety = get_child_value(
+            state, "vehicleConfig.vehicleFeature.remoteFeature.windowSafety"
+        ) == "1"
+        vehicle.feature_rear_occupancy_alert = get_child_value(
+            state, "vehicleConfig.vehicleFeature.remoteFeature.rearOccupancyAlert"
+        ) == "1"
+
+        # Store raw data for debugging
         vehicle.data = state
 
     def _get_cached_vehicle_state(self, token: Token, vehicle: Vehicle) -> dict:
+        """Get cached vehicle state from API.
+        
+        ENHANCED: Now requests ALL available data including weather and vehicle features.
+        """
         url = self.API_URL + "cmm/gvi"
 
+        # ENHANCED: Request ALL available data from the API
         body = {
             "vehicleConfigReq": {
-                "airTempRange": "0",
-                "maintenance": "1",
-                "seatHeatCoolOption": "0",
-                "vehicle": "1",
-                "vehicleFeature": "0",
+                "airTempRange": "1",       # Get temperature range options
+                "maintenance": "1",        # Get maintenance schedule
+                "seatHeatCoolOption": "1", # Get seat heat/cool capabilities
+                "vehicle": "1",            # Get vehicle details
+                "vehicleFeature": "1",     # GET SUPPORTED FEATURES!
             },
             "vehicleInfoReq": {
-                "drivingActivty": "0",
-                "dtc": "1",
-                "enrollment": "1",
-                "functionalCards": "0",
-                "location": "1",
-                "vehicleStatus": "1",
-                "weather": "0",
+                "drivingActivty": "1",     # Get driving activity
+                "drivingInfo": "1",        # Get driving info
+                "dtc": "1",                # Get diagnostic codes
+                "enrollment": "1",         # Get enrollment info
+                "functionalCards": "0",    # Not needed
+                "location": "1",           # Get location
+                "vehicleStatus": "1",      # Get vehicle status
+                "weather": "1",            # GET WEATHER AT CAR LOCATION!
             },
             "vinKey": [vehicle.key],
         }

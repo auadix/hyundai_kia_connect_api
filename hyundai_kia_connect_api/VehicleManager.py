@@ -84,9 +84,11 @@ class VehicleManager:
         self.vehicles_valid = False
 
     def initialize(self) -> None:
+        # FIXED: Pass self.token to login() so rmtoken can be reused
         self.token: Token = self.api.login(
             self.username,
             self.password,
+            token=self.token,  # Pass existing token for rmtoken reuse
             otp_handler=self.otp_handler,
             pin=self.pin,
         )
@@ -163,8 +165,23 @@ class VehicleManager:
     def check_and_refresh_token(self) -> bool:
         if self.token is None:
             self.initialize()
-        elif not self.vehicles_valid:
+            return True
+        
+        # Check if we have a valid access_token before trying to use it
+        # If access_token is empty/missing, we need to login first
+        if not self.token.access_token:
+            _LOGGER.debug(f"{DOMAIN} - No access_token, need to login with rmtoken")
+            self.token = self.api.login(
+                self.username,
+                self.password,
+                token=self.token,  # Pass existing token for rmtoken reuse
+                otp_handler=self.otp_handler,
+                pin=self.pin,
+            )
+        
+        if not self.vehicles_valid:
             self.initialize_vehicles()
+            
         now_utc = dt.datetime.now(dt.timezone.utc)
         grace_period = timedelta(seconds=10)
         min_supported_datetime = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
@@ -181,9 +198,11 @@ class VehicleManager:
                 token_expired = valid_until - grace_period <= now_utc
         if token_expired or self.api.test_token(self.token) is False:
             _LOGGER.debug(f"{DOMAIN} - Refresh token expired")
+            # FIXED: Pass self.token to login() so rmtoken can be reused
             self.token: Token = self.api.login(
                 self.username,
                 self.password,
+                token=self.token,  # Pass existing token for rmtoken reuse
                 otp_handler=self.otp_handler,
                 pin=self.pin,
             )
