@@ -996,10 +996,10 @@ class KiaUvoApiUSA(ApiImpl):
         # NEW: EXTENDED LOCATION DATA
         # =====================================================================
         
-        vehicle.location_altitude = get_child_value(
+        vehicle._location_altitude = get_child_value(
             state, "lastVehicleInfo.location.coord.alt"
         )
-        vehicle.location_heading = get_child_value(
+        vehicle._location_heading = get_child_value(
             state, "lastVehicleInfo.location.head"
         )
         loc_speed = get_child_value(state, "lastVehicleInfo.location.speed.value")
