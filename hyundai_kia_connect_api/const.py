@@ -56,7 +56,7 @@ SPEED_KPH = "km/h"
 SPEED_MPH = "mph"
 SPEED_UNITS = {
     None: None,
-    0: SPEED_KPH,
+    0: SPEED_MPH,  # Default to mph for USA
     1: SPEED_MPH,
     2: SPEED_MPH,
     3: SPEED_MPH,

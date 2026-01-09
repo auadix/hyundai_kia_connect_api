@@ -50,6 +50,6 @@ setup(
     test_suite="tests",
     tests_require=test_requirements,
     url="https://github.com/Hyundai-Kia-Connect/hyundai_kia_connect_api",
-    version="3.53.5",
+    version="3.53.6",
     zip_safe=False,
 )
