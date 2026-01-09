@@ -26,6 +26,7 @@ from .const import (
     DOMAIN,
     LOGIN_TOKEN_LIFETIME,
     ORDER_STATUS,
+    SPEED_UNITS,
     TEMPERATURE_UNITS,
     VEHICLE_LOCK_ACTION,
 )
@@ -1058,7 +1059,7 @@ class KiaUvoApiUSA(ApiImpl):
         loc_speed_unit = get_child_value(state, "lastVehicleInfo.location.speed.unit")
         if loc_speed is not None:
             vehicle._location_speed = loc_speed
-            vehicle._location_speed_unit = loc_speed_unit
+            vehicle._location_speed_unit = SPEED_UNITS.get(loc_speed_unit, SPEED_UNITS[0])
 
         # =====================================================================
         # NEW: WEATHER AT VEHICLE LOCATION

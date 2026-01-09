@@ -52,6 +52,16 @@ TEMPERATURE_C = "°C"
 TEMPERATURE_F = "°F"
 TEMPERATURE_UNITS = {None: None, 0: TEMPERATURE_C, 1: TEMPERATURE_F}
 
+SPEED_KPH = "km/h"
+SPEED_MPH = "mph"
+SPEED_UNITS = {
+    None: None,
+    0: SPEED_KPH,
+    1: SPEED_MPH,
+    2: SPEED_MPH,
+    3: SPEED_MPH,
+}
+
 SEAT_STATUS = {
     None: None,
     0: "Off",
