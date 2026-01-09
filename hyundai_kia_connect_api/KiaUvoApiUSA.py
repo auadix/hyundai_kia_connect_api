@@ -482,9 +482,35 @@ class KiaUvoApiUSA(ApiImpl):
         headers["sid"] = token.access_token
         response = self.session.get(url, headers=headers)
         _LOGGER.debug(f"{DOMAIN} - Get Vehicles Response {response.text}")
-        response = response.json()
+        response_json = response.json()
+
+        # Check for API error status
+        if "status" in response_json:
+            status_code = response_json["status"].get("statusCode")
+            if status_code != 0:
+                error_type = response_json["status"].get("errorType")
+                error_code = response_json["status"].get("errorCode")
+                error_message = response_json["status"].get("errorMessage", "Unknown error")
+                _LOGGER.error(f"{DOMAIN} - get_vehicles API error: statusCode={status_code}, errorType={error_type}, errorCode={error_code}, message={error_message}")
+
+                # Check if session is invalid (error codes 1003, 1005)
+                if status_code == 1 and error_type == 1 and error_code in [1003, 1005]:
+                    _LOGGER.error(f"{DOMAIN} - Session invalid in get_vehicles, authentication may be needed")
+                    raise AuthError(f"Session invalid: {error_message}")
+
+                raise RequestException(f"API error in get_vehicles: {error_message}")
+
+        # Check if response has expected structure
+        if "payload" not in response_json:
+            _LOGGER.error(f"{DOMAIN} - get_vehicles response missing 'payload' key. Response: {response_json}")
+            raise Exception(f"{DOMAIN} - Invalid response from get_vehicles API: missing 'payload' key")
+
+        if "vehicleSummary" not in response_json["payload"]:
+            _LOGGER.error(f"{DOMAIN} - get_vehicles response missing 'vehicleSummary' key. Payload: {response_json['payload']}")
+            raise Exception(f"{DOMAIN} - Invalid response from get_vehicles API: missing 'vehicleSummary' key")
+
         result = []
-        for entry in response["payload"]["vehicleSummary"]:
+        for entry in response_json["payload"]["vehicleSummary"]:
             vehicle: Vehicle = Vehicle(
                 id=entry["vehicleIdentifier"],
                 name=entry["nickName"],
@@ -510,9 +536,35 @@ class KiaUvoApiUSA(ApiImpl):
         _LOGGER.debug(f"{DOMAIN} - Vehicles Type Passed in: {type(vehicles)}")
         _LOGGER.debug(f"{DOMAIN} - Vehicles Passed in: {vehicles}")
 
-        response = response.json()
+        response_json = response.json()
+
+        # Check for API error status
+        if "status" in response_json:
+            status_code = response_json["status"].get("statusCode")
+            if status_code != 0:
+                error_type = response_json["status"].get("errorType")
+                error_code = response_json["status"].get("errorCode")
+                error_message = response_json["status"].get("errorMessage", "Unknown error")
+                _LOGGER.error(f"{DOMAIN} - refresh_vehicles API error: statusCode={status_code}, errorType={error_type}, errorCode={error_code}, message={error_message}")
+
+                # Check if session is invalid (error codes 1003, 1005)
+                if status_code == 1 and error_type == 1 and error_code in [1003, 1005]:
+                    _LOGGER.error(f"{DOMAIN} - Session invalid in refresh_vehicles, authentication may be needed")
+                    raise AuthError(f"Session invalid: {error_message}")
+
+                raise RequestException(f"API error in refresh_vehicles: {error_message}")
+
+        # Check if response has expected structure
+        if "payload" not in response_json:
+            _LOGGER.error(f"{DOMAIN} - refresh_vehicles response missing 'payload' key. Response: {response_json}")
+            raise Exception(f"{DOMAIN} - Invalid response from refresh_vehicles API: missing 'payload' key")
+
+        if "vehicleSummary" not in response_json["payload"]:
+            _LOGGER.error(f"{DOMAIN} - refresh_vehicles response missing 'vehicleSummary' key. Payload: {response_json['payload']}")
+            raise Exception(f"{DOMAIN} - Invalid response from refresh_vehicles API: missing 'vehicleSummary' key")
+
         if isinstance(vehicles, dict):
-            for entry in response["payload"]["vehicleSummary"]:
+            for entry in response_json["payload"]["vehicleSummary"]:
                 vid = entry.get("vehicleIdentifier")
                 if vid is None:
                     continue
@@ -534,7 +586,7 @@ class KiaUvoApiUSA(ApiImpl):
         else:
             # For readability work with vehicle without s
             vehicle = vehicles
-            for entry in response["payload"]["vehicleSummary"]:
+            for entry in response_json["payload"]["vehicleSummary"]:
                 if vehicle.id == entry["vehicleIdentifier"]:
                     vehicle.name = entry["nickName"]
                     vehicle.model = entry["modelName"]
