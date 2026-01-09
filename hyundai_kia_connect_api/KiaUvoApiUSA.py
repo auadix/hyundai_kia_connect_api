@@ -1059,7 +1059,8 @@ class KiaUvoApiUSA(ApiImpl):
         loc_speed_unit = get_child_value(state, "lastVehicleInfo.location.speed.unit")
         if loc_speed is not None:
             vehicle._location_speed = loc_speed
-            vehicle._location_speed_unit = SPEED_UNITS.get(loc_speed_unit, SPEED_UNITS[0])
+            # Default to mph (SPEED_UNITS[1]) for USA API instead of km/h
+            vehicle._location_speed_unit = SPEED_UNITS.get(loc_speed_unit, SPEED_UNITS[1])
 
         # =====================================================================
         # NEW: WEATHER AT VEHICLE LOCATION
