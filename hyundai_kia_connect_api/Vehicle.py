@@ -261,6 +261,14 @@ class Vehicle:
     enrollment_registration_date: str = None
     enrollment_expiration_mileage: str = None
     is_financed: bool = None
+    finance_registered: bool = None
+
+    # =========================================================================
+    # NEW: Status Fields
+    # =========================================================================
+    rsa_status: int = None  # Roadside Assistance status
+    link_status: int = None  # Connectivity status
+    stop_lamp_status: bool = None  # Overall stop lamp fault status
 
     # =========================================================================
     # NEW: Supported Features (from vehicleFeature)

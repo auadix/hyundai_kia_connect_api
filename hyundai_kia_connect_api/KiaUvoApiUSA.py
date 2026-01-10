@@ -1229,6 +1229,23 @@ class KiaUvoApiUSA(ApiImpl):
         vehicle.is_financed = get_child_value(
             state, "lastVehicleInfo.financed"
         )
+        vehicle.finance_registered = get_child_value(
+            state, "lastVehicleInfo.financeRegistered"
+        )
+
+        # =====================================================================
+        # NEW: STATUS FIELDS
+        # =====================================================================
+
+        vehicle.rsa_status = get_child_value(
+            state, "lastVehicleInfo.rsaStatus"
+        )
+        vehicle.link_status = get_child_value(
+            state, "lastVehicleInfo.linkStatus"
+        )
+        vehicle.stop_lamp_status = get_child_value(
+            state, "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.lampWireStatus.stopLamp.stopLampStatus"
+        )
 
         # =====================================================================
         # NEW: SUPPORTED FEATURES (from vehicleFeature)
