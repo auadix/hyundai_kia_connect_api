@@ -1088,12 +1088,12 @@ class KiaUvoApiUSA(ApiImpl):
         )
         loc_speed = get_child_value(state, "lastVehicleInfo.location.speed.value")
         loc_speed_unit = get_child_value(state, "lastVehicleInfo.location.speed.unit")
-        if loc_speed is not None:
-            vehicle._location_speed = loc_speed
-            vehicle._location_speed_unit = SPEED_UNITS.get(loc_speed_unit, SPEED_MPH)
-            _LOGGER.debug(
-                f"Speed unit code received: {loc_speed_unit}, mapped to: {vehicle._location_speed_unit}"
-            )
+        vehicle._location_speed = loc_speed
+        # Always set unit, even if speed value is None - defaults to mph for USA
+        vehicle._location_speed_unit = SPEED_UNITS.get(loc_speed_unit, SPEED_MPH)
+        _LOGGER.debug(
+            f"Speed: {loc_speed}, Unit code: {loc_speed_unit}, Mapped unit: {vehicle._location_speed_unit}"
+        )
 
         # =====================================================================
         # NEW: WEATHER AT VEHICLE LOCATION
