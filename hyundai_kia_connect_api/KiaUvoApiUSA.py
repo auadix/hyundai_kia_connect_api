@@ -766,6 +766,37 @@ class KiaUvoApiUSA(ApiImpl):
                 "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.evStatus.windowStatus.windowRR",
             )
         
+        # Fallback: windowStatus format (non-EV vehicles like Sorento)
+        # Values: 0 = closed, non-0 = open
+        if vehicle.front_left_window_is_open is None:
+            window_fl = get_child_value(
+                state,
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.windowStatus.windowFL",
+            )
+            if window_fl is not None:
+                vehicle.front_left_window_is_open = window_fl != 0
+        if vehicle.front_right_window_is_open is None:
+            window_fr = get_child_value(
+                state,
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.windowStatus.windowFR",
+            )
+            if window_fr is not None:
+                vehicle.front_right_window_is_open = window_fr != 0
+        if vehicle.back_left_window_is_open is None:
+            window_rl = get_child_value(
+                state,
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.windowStatus.windowRL",
+            )
+            if window_rl is not None:
+                vehicle.back_left_window_is_open = window_rl != 0
+        if vehicle.back_right_window_is_open is None:
+            window_rr = get_child_value(
+                state,
+                "lastVehicleInfo.vehicleStatusRpt.vehicleStatus.windowStatus.windowRR",
+            )
+            if window_rr is not None:
+                vehicle.back_right_window_is_open = window_rr != 0
+        
         # EV Status
         vehicle.ev_battery_percentage = get_child_value(
             state,
