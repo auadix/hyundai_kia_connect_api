@@ -601,6 +601,10 @@ class Vehicle:
         else:
             self._location_speed = value
 
+    @property
+    def location_speed_unit(self):
+        return self._location_speed_unit
+
     # =========================================================================
     # NEW: Weather properties
     # =========================================================================

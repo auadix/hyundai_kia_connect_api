@@ -55,11 +55,12 @@ TEMPERATURE_UNITS = {None: None, 0: TEMPERATURE_C, 1: TEMPERATURE_F}
 SPEED_KPH = "km/h"
 SPEED_MPH = "mph"
 SPEED_UNITS = {
-    None: None,
-    0: SPEED_MPH,  # Default to mph for USA
+    None: SPEED_MPH,  # Default to mph for USA when unit is not specified
+    0: SPEED_MPH,
     1: SPEED_MPH,
     2: SPEED_MPH,
     3: SPEED_MPH,
+    4: SPEED_KPH,  # Some vehicles may report km/h
 }
 
 SEAT_STATUS = {
