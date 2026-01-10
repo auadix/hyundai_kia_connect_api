@@ -34,6 +34,7 @@ from .const import (
     VEHICLE_LOCK_ACTION,
 )
 from .exceptions import APIError
+from requests.exceptions import RequestException
 from .HyundaiBlueLinkApiBR import HyundaiBlueLinkApiBR
 from .HyundaiBlueLinkApiUSA import HyundaiBlueLinkApiUSA
 from .KiaUvoApiAU import KiaUvoApiAU
@@ -166,7 +167,7 @@ class VehicleManager:
         if self.token is None:
             self.initialize()
             return True
-        
+
         # Check if we have a valid access_token before trying to use it
         # If access_token is empty/missing, we need to login first
         if not self.token.access_token:
@@ -178,9 +179,21 @@ class VehicleManager:
                 otp_handler=self.otp_handler,
                 pin=self.pin,
             )
-        
+
         if not self.vehicles_valid:
-            self.initialize_vehicles()
+            try:
+                self.initialize_vehicles()
+            except RequestException as e:
+                # If session is invalid, re-authenticate and retry
+                _LOGGER.debug(f"{DOMAIN} - Session invalid during initialize_vehicles, re-authenticating: {e}")
+                self.token = self.api.login(
+                    self.username,
+                    self.password,
+                    token=self.token,
+                    otp_handler=self.otp_handler,
+                    pin=self.pin,
+                )
+                self.initialize_vehicles()
             
         now_utc = dt.datetime.now(dt.timezone.utc)
         grace_period = timedelta(seconds=10)
@@ -206,7 +219,19 @@ class VehicleManager:
                 otp_handler=self.otp_handler,
                 pin=self.pin,
             )
-            self.vehicles = self.api.refresh_vehicles(self.token, self.vehicles)
+            try:
+                self.vehicles = self.api.refresh_vehicles(self.token, self.vehicles)
+            except RequestException as e:
+                # If session is still invalid after refresh, re-authenticate and retry
+                _LOGGER.debug(f"{DOMAIN} - Session invalid during refresh_vehicles, re-authenticating: {e}")
+                self.token = self.api.login(
+                    self.username,
+                    self.password,
+                    token=self.token,
+                    otp_handler=self.otp_handler,
+                    pin=self.pin,
+                )
+                self.vehicles = self.api.refresh_vehicles(self.token, self.vehicles)
             return True
         return False
 
